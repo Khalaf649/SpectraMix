@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Signal Processing Lab – Task 4</title>
+
+    <!-- Lucide Icons (official JS version – same as Lucide React) -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+    <!-- Your dark theme -->
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <!-- HEADER + TABS (Exactly like your React version) -->
+      <header>
+        <div class="header-container">
+          <div class="header-left">
+            <div class="icon-box">
+              <i data-lucide="waves" class="logo-icon"></i>
+            </div>
+            <div>
+              <h1 class="title">Signal Processing Lab</h1>
+              <p class="subtitle">Fourier Transform & Beamforming Simulator</p>
+            </div>
+          </div>
+
+          <!-- TABS -->
+          <div class="tabs-container tabs-list">
+            <button class="tab active tabs-trigger" data-mode="ft">
+              <i data-lucide="waves" class="tab-icon"></i>
+              FT Mixer
+            </button>
+            <button class="tab tabs-trigger" data-mode="beam">
+              <i data-lucide="radio" class="tab-icon"></i>
+              Beamforming
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- MAIN CONTENT – ZERO REPEATED HTML -->
+      <main id="main-content">
+        <div id="ft-content" class="mode-content"></div>
+        <div id="beam-content" class="mode-content" style="display: none"></div>
+      </main>
+
+      <!-- Global Progress Bar -->
+      <div id="progress-bar" class="progress-bar" style="display: none">
+        <div class="progress-fill"></div>
+        <span class="progress-text">Computing mixed image...</span>
+      </div>
+    </div>
+
+    <!-- Initialize Lucide + Start App -->
+    <script type="module">
+      // Initialize all Lucide icons
+      lucide.createIcons();
+
+      // Start the app
+      import "./main.js";
+    </script>
+  </body>
+</html>
