@@ -3,8 +3,8 @@ import {
   applyBrightnessContrast,
   normalizeForDisplay,
 } from "../utils/imageProcessing";
-import { useRef, useState, useEffect } from "react";
-import SelectBox from "./SelectBox";
+import { useRef, useState, useEffect, useCallback } from "react";
+import SelectBox from "./UI/SelectBox";
 function ImageViewPort({
   id,
   title,
@@ -33,7 +33,7 @@ function ImageViewPort({
   const ftCanvasRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  const [ftComponent, setFtComponent] = useState("magnitude");
+  const [ftComponent, setFtComponent] = useState("FT Magnitude");
   const [brightness, setBrightness] = useState(0);
   const [contrast, setContrast] = useState(0);
   const [ftBrightness, setFtBrightness] = useState(0);
@@ -54,17 +54,7 @@ function ImageViewPort({
 
     if (isOutput && outputImage) {
       // Normalize Float64Array for display
-      let min = Infinity,
-        max = -Infinity;
-      for (let i = 0; i < outputImage.length; i++) {
-        if (outputImage[i] < min) min = outputImage[i];
-        if (outputImage[i] > max) max = outputImage[i];
-      }
-      const range = max - min || 1;
-      const normalized = new Uint8ClampedArray(outputImage.length);
-      for (let i = 0; i < outputImage.length; i++) {
-        normalized[i] = ((outputImage[i] - min) / range) * 255;
-      }
+      const normalized = normalizeForDisplay(outputImage, false);
       const adjusted = applyBrightnessContrast(
         normalized,
         brightness,
@@ -83,22 +73,23 @@ function ImageViewPort({
     let data = null;
     let useLog = true;
     switch (ftComponent) {
-      case "magnitude":
+      case "FT Magnitude":
         data = ftMagnitude;
         break;
-      case "phase":
+      case "FT Phase":
         data = ftPhase;
         useLog = false;
         break;
-      case "real":
+      case "FT Real":
         data = ftReal;
         useLog = false;
         break;
-      case "imaginary":
+      case "FT Imaginary":
         data = ftImaginary;
         useLog = false;
         break;
     }
+
     if (!data) return;
     const canvas = ftCanvasRef.current;
     const ctx = canvas.getContext("2d");
@@ -159,34 +150,54 @@ function ImageViewPort({
     regionPercentage,
     regionType,
   ]);
-  const handleDoubleClick = () => {
+  const handleDoubleClick = useCallback(() => {
     if (!isOutput) fileInputRef.current?.click();
-  };
+  }, [isOutput]);
 
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file && onImageLoad) onImageLoad(id, file);
-    e.target.value = "";
-  };
+  const handleFileChange = useCallback(
+    (e) => {
+      const file = e.target.files?.[0];
+      if (file && onImageLoad) onImageLoad(id, file);
+      e.target.value = "";
+    },
+    [id, onImageLoad]
+  );
 
-  const handleClick = () => {
+  const handleClick = useCallback(() => {
     if (isOutput && onSelect) onSelect(id);
-  };
+  }, [isOutput, onSelect, id]);
 
   const handleImageMouseDown = (e) => {
-    // Implement drag to adjust brightness/contrast if needed
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
   };
+
   const handleImageMouseMove = (e) => {
-    // Implement drag to adjust brightness/contrast if needed
+    if (!isDragging) return;
+    const dx = e.clientX - dragStart.x;
+    const dy = e.clientY - dragStart.y;
+    setContrast((prev) => Math.max(-100, Math.min(100, prev + dx * 0.5)));
+    setBrightness((prev) => Math.max(-100, Math.min(100, prev - dy * 0.5)));
+    setDragStart({ x: e.clientX, y: e.clientY });
   };
-  const handleImageMouseUp = () => {};
-  const handleFtMouseMove = (e) => {
-    // Implement drag to adjust brightness/contrast if needed
-  };
-  const handleFtMouseUp = (e) => {};
+
+  const handleImageMouseUp = () => setIsDragging(false);
+
   const handleFtMouseDown = (e) => {
-    // Implement drag to adjust brightness/contrast if needed
+    setIsFtDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
   };
+
+  const handleFtMouseMove = (e) => {
+    if (!isFtDragging) return;
+    const dx = e.clientX - dragStart.x;
+    const dy = e.clientY - dragStart.y;
+    setFtContrast((prev) => Math.max(-100, Math.min(100, prev + dx * 0.5)));
+    setFtBrightness((prev) => Math.max(-100, Math.min(100, prev - dy * 0.5)));
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleFtMouseUp = () => setIsFtDragging(false);
 
   const canvasStyle =
     displayWidth > 0
@@ -255,6 +266,7 @@ function ImageViewPort({
               value={ftComponent}
               onChange={setFtComponent}
               options={["FT Magnitude", "FT Phase", "FT Real", "FT Imaginary"]}
+              className="select-trigger-ft"
             />
           </div>
 

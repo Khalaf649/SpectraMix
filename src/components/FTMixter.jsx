@@ -10,7 +10,7 @@ import {
   imageToCanvas,
 } from "../utils/imageProcessing.js";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 function FTMixer() {
   const initialImageState = {
     grayscale: null,
@@ -57,10 +57,10 @@ function FTMixer() {
   const [mixerMode, setMixerMode] = useState("component");
   const [selectedOutput, setSelectedOutput] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [componentType, setComponentType] = useState("mag-phase");
+  const [componentType, setComponentType] = useState("Mag/Phase");
   const [regionSettings, setRegionSettings] = useState({
     size: 50,
-    region: "inner",
+    isInner: true,
   });
   const [progress, setProgress] = useState(0);
   // const abortControllerRef = useRef(null);
@@ -68,7 +68,7 @@ function FTMixer() {
   const [unifiedSize, setUnifiedSize] = useState({ width: 0, height: 0 });
   const originalCanvasesRef = useRef([null, null, null, null]);
 
-  const handleUnifySize = () => {
+  const handleUnifySize = useCallback(() => {
     const loadedImages = originalCanvasesRef.current.filter((c) => c !== null);
     if (loadedImages.length === 0) {
       setUnifiedSize({ width: 0, height: 0 });
@@ -87,14 +87,17 @@ function FTMixer() {
         smallestArea = area;
       }
     }
-
     // Set unified size to the dimensions of the smallest image
     setUnifiedSize({ width: smallest.width, height: smallest.height });
-  };
-  const getLoadedImageIndices = () =>
-    images
-      .map((img, idx) => (img.grayscale !== null ? idx : -1))
-      .filter((i) => i !== -1);
+  }, []);
+
+  const loadedImageIndices = useMemo(
+    () =>
+      images
+        .map((img, idx) => (img.grayscale !== null ? idx : -1))
+        .filter((idx) => idx !== -1),
+    [images]
+  );
 
   useEffect(() => {
     if (unifiedSize.width === 0 || unifiedSize.height === 0) return;
@@ -128,31 +131,32 @@ function FTMixer() {
   }, [unifiedSize]);
 
   // Inside your component
-  const handleImageLoad = async (id, file) => {
-    try {
-      // Load the image
-      const img = await loadImage(file);
+  const handleImageLoad = useCallback(
+    async (id, file) => {
+      try {
+        const img = await loadImage(file);
+        const canvas = imageToCanvas(img);
 
-      // Convert to canvas
-      const canvas = imageToCanvas(img);
+        // Store canvas safely
+        originalCanvasesRef.current[id - 1] = canvas;
 
-      // Store the canvas in ref
-      originalCanvasesRef.current[id - 1] = canvas;
+        // Update unified size AFTER canvas is stored
+        handleUnifySize();
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    [handleUnifySize] // ✅ dependency
+  );
 
-      // Update unified size
-      handleUnifySize();
-    } catch (error) {
-      console.error(error);
-    }
-  };
-  const handleRegionSetting = (key, value) => {
+  const handleRegionSetting = useCallback((key, value) => {
     setRegionSettings((prev) => ({
       ...prev,
       [key]: value,
     }));
-  };
+  }, []);
 
-  const handleWeights = (index, key, value) => {
+  const handleWeights = useCallback((index, key, value) => {
     setWeights((prev) => {
       const newWeights = [...prev];
       newWeights[index] = {
@@ -161,14 +165,14 @@ function FTMixer() {
       };
       return newWeights;
     });
-  };
+  }, []);
 
-  const handleMix = () => {
+  const handleMix = useCallback(() => {
     // Implement mixing logic here
-  };
-  const handleCancel = () => {
+  }, []);
+  const handleCancel = useCallback(() => {
     // Implement cancel logic here
-  };
+  }, []);
   const hasImages = images.some((img) => img.grayscale !== null);
 
   return (
@@ -188,8 +192,6 @@ function FTMixer() {
         onMixerModeChange={setMixerMode}
         regionSettings={regionSettings}
         onRegionSettingChange={handleRegionSetting}
-        // sharedRegionSettings={sharedRegionSettings}
-        // onSharedRegionSettingsChange={handleSharedRegionSettingsChange}
         componentType={componentType}
         onComponentTypeChange={setComponentType}
         selectedOutput={selectedOutput}
@@ -199,7 +201,7 @@ function FTMixer() {
         isProcessing={isProcessing}
         progress={progress}
         hasImages={hasImages}
-        loadedImageIndices={getLoadedImageIndices()}
+        loadedImageIndices={loadedImageIndices}
       />
 
       <OutputViewPorts

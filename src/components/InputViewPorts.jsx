@@ -24,7 +24,7 @@ function InputViewPorts({
           paddedHeight={images[id - 1].paddedHeight}
           onImageLoad={handleImageLoad}
           regionPercentage={mixerMode === "region" ? regionSettings.size : 0}
-          regionType={regionSettings.region}
+          regionType={regionSettings.isInner ? "inner" : "outer"}
           showRegion={
             mixerMode === "region" && images[id - 1].grayscale !== null
           }

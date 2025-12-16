@@ -796,9 +796,11 @@ header {
   position: relative;
   display: flex;
   width: 100%;
+  height: 2rem;
   touch-action: none;
   user-select: none;
   align-items: center;
+  cursor: pointer;
 }
 
 .slider-track {
@@ -806,7 +808,7 @@ header {
   height: 0.5rem;
   width: 100%;
   flex-grow: 1;
-  overflow: hidden;
+  overflow: visible; /* Must be visible so thumb can pop over edges */
   border-radius: 9999px;
   background-color: var(--secondary);
 }
@@ -815,17 +817,26 @@ header {
   position: absolute;
   height: 100%;
   background-color: var(--primary);
+  pointer-events: none; /* Let clicks pass through to the track */
 }
 
 .slider-thumb {
+  /* Positioning is handled in inline styles (React), styles here are cosmetic */
   display: block;
   height: 1.25rem;
   width: 1.25rem;
-  border-radius: 9999px;
-  border: 2px solid var(--primary);
-  background-color: var(--background);
-  transition: all 150ms ease;
-  cursor: pointer;
+  border-radius: 50%;
+  border: 2px solid var(--primary); /* Blue (or var(--primary)) */
+  background-color: var(--background); /* (or var(--background)) */
+  cursor: grab;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+/* Interaction States */
+.slider-root:active .slider-thumb {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(1.1) !important; /* Slight pop when dragging */
 }
 
 .slider-thumb:focus-visible {

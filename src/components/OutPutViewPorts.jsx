@@ -10,6 +10,7 @@ function OutputViewPorts({
       {[1, 2].map((id) => {
         return (
           <ImageViewPort
+            grayscale={null}
             key={id}
             id={id}
             title={`Output ${id}`}
