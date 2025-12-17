@@ -1,14 +1,9 @@
-import {
-  fft2d,
-  fftShift,
-  computeMagnitude,
-  computePhase,
-  nextPowerOf2,
-} from "./fft";
+import { fft2d, padToPowerOf2, computeMagnitude, computePhase } from "./fft";
 
 export function convertToGrayscale(imageData) {
+  // takes RGBA ImageData and returns Uint8ClampedArray(0-255) grayscale
   const data = imageData.data;
-  const grayscale = new Uint8ClampedArray(imageData.width * imageData.height);
+  const grayscale = new Uint8ClampedArray(imageData.width * imageData.height); // force 0-255
 
   for (let i = 0; i < data.length; i += 4) {
     // Luminance formula
@@ -19,7 +14,8 @@ export function convertToGrayscale(imageData) {
   return grayscale;
 }
 
-export function resizeImage(canvas, targetWidth, targetHeight) {
+export function resizeCanvas(canvas, targetWidth, targetHeight) {
+  // takes a canvas and returns a resized canvas
   const resizedCanvas = document.createElement("canvas");
   resizedCanvas.width = targetWidth;
   resizedCanvas.height = targetHeight;
@@ -33,6 +29,7 @@ export function resizeImage(canvas, targetWidth, targetHeight) {
 }
 
 export function applyBrightnessContrast(data, brightness, contrast) {
+  // take the grayscale data and apply brightness and contrast adjustments and return grayscale data
   const result = new Uint8ClampedArray(data.length);
   const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
 
@@ -46,6 +43,7 @@ export function applyBrightnessContrast(data, brightness, contrast) {
 }
 
 export function grayscaleToImageData(grayscale, width, height) {
+  // takes gray scale Uint8ClampedArray and returns ImageData(RGBA)
   const imageData = new ImageData(width, height);
 
   for (let i = 0; i < grayscale.length; i++) {
@@ -60,39 +58,32 @@ export function grayscaleToImageData(grayscale, width, height) {
 }
 
 export function computeFFT(grayscale, width, height) {
-  // Pad to power of 2
-  const paddedWidth = nextPowerOf2(width);
-  const paddedHeight = nextPowerOf2(height);
-
-  const padded = new Float64Array(paddedWidth * paddedHeight);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      padded[y * paddedWidth + x] = grayscale[y * width + x];
-    }
-  }
+  const { padded, newWidth, newHeight } = padToPowerOf2(
+    grayscale,
+    width,
+    height
+  );
+  console.log("newWidth:", newWidth, "newHeight:", newHeight);
 
   // Compute FFT
-  const { real, imag } = fft2d(padded, paddedWidth, paddedHeight);
-
-  // Shift to center
-  const shiftedReal = fftShift(real, paddedWidth, paddedHeight);
-  const shiftedImag = fftShift(imag, paddedWidth, paddedHeight);
+  const { real, imag } = fft2d(padded, newWidth, newHeight);
 
   // Compute magnitude and phase
-  const magnitude = computeMagnitude(shiftedReal, shiftedImag);
-  const phase = computePhase(shiftedReal, shiftedImag);
-
+  const magnitude = computeMagnitude(real, imag);
+  const phase = computePhase(real, imag);
+  console.log("DONE");
   return {
     magnitude,
     phase,
-    real: shiftedReal,
-    imaginary: shiftedImag,
-    paddedWidth,
-    paddedHeight,
+    real: real,
+    imaginary: imag,
+    paddedWidth: newWidth,
+    paddedHeight: newHeight,
   };
 }
 
 export function normalizeForDisplay(data, useLog = true) {
+  // takes a Float64Array(grey scale) and normalizes it to greyScale Uint8ClampedArray for display
   const result = new Uint8ClampedArray(data.length);
 
   let processedData = data;
@@ -120,34 +111,8 @@ export function normalizeForDisplay(data, useLog = true) {
   return result;
 }
 
-export function createRegionMask(width, height, percentage, type) {
-  const mask = new Float64Array(width * height);
-  const centerX = width / 2;
-  const centerY = height / 2;
-
-  const regionSize = percentage / 100;
-  const halfWidth = (width * regionSize) / 2;
-  const halfHeight = (height * regionSize) / 2;
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const dx = Math.abs(x - centerX);
-      const dy = Math.abs(y - centerY);
-
-      const isInner = dx <= halfWidth && dy <= halfHeight;
-
-      if (type === "inner") {
-        mask[y * width + x] = isInner ? 1 : 0;
-      } else {
-        mask[y * width + x] = isInner ? 0 : 1;
-      }
-    }
-  }
-
-  return mask;
-}
-
 export async function loadImage(file) {
+  // return an HTMLImageElement
   // Read the file as a data URL
   const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -168,6 +133,7 @@ export async function loadImage(file) {
 }
 
 export function imageToCanvas(img) {
+  // take an htmlTagElement and return a canvas with the image drawn on it
   const canvas = document.createElement("canvas");
   canvas.width = img.width;
   canvas.height = img.height;

@@ -17,15 +17,14 @@ function MixerControls({
   onCancel,
   isProcessing,
   progress,
-  hasImages,
   loadedImageIndices,
 }) {
+  const hasImages = loadedImageIndices.length > 0;
+
   const componentLabels =
     componentType === "Mag/Phase"
       ? ["Magnitude", "Phase"]
       : ["Real", "Imaginary"];
-  const componentLabelsShort =
-    componentType === "Mag/Phase" ? ["Mag", "Phase"] : ["Real", "Imag"];
   return (
     <div className="ft-mixer-sidebar">
       <div className="control-panel mixer-controls-container">
@@ -70,7 +69,7 @@ function MixerControls({
                   <span className="region-value">{regionSettings.size}%</span>
                 </div>
                 <Slider
-                  value={[regionSettings.size]}
+                  value={regionSettings.size}
                   onChange={(v) => onRegionSettingChange("size", v)}
                   min={10}
                   max={100}
@@ -112,7 +111,7 @@ function MixerControls({
                     </span>
                   </div>
                   <Slider
-                    value={[weights[imgIdx].component1Gain * 100]}
+                    value={weights[imgIdx].component1Gain * 100}
                     onChange={(v) =>
                       onWeightChange(imgIdx, "component1Gain", v / 100)
                     }
@@ -131,7 +130,7 @@ function MixerControls({
                     </span>
                   </div>
                   <Slider
-                    value={[weights[imgIdx].component2Gain * 100]}
+                    value={weights[imgIdx].component2Gain * 100}
                     onChange={(v) =>
                       onWeightChange(imgIdx, "component2Gain", v / 100)
                     }

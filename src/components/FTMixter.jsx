@@ -4,7 +4,7 @@ import MixerControls from "./MixerControls.jsx";
 
 import {
   canvasToGrayscale,
-  resizeImage,
+  resizeCanvas,
   computeFFT,
   loadImage,
   imageToCanvas,
@@ -25,13 +25,13 @@ function FTMixer() {
   };
 
   const initialOutputState = {
-    image: null,
+    grayscale: null,
     ftMagnitude: null,
     ftPhase: null,
     ftReal: null,
     ftImaginary: null,
-    width: 0,
-    height: 0,
+    width: 0, // =paddedWidth of source image
+    height: 0, // =paddedHeight of source image
   };
 
   const initalWeights = [
@@ -106,7 +106,7 @@ function FTMixer() {
       for (let i = 0; i < 4; i++) {
         const canvas = originalCanvasesRef.current[i];
         if (!canvas) continue;
-        const resizedCanvas = resizeImage(
+        const resizedCanvas = resizeCanvas(
           canvas,
           unifiedSize.width,
           unifiedSize.height
@@ -134,8 +134,8 @@ function FTMixer() {
   const handleImageLoad = useCallback(
     async (id, file) => {
       try {
-        const img = await loadImage(file);
-        const canvas = imageToCanvas(img);
+        const img = await loadImage(file); // htmlImageElement
+        const canvas = imageToCanvas(img); // draw image to canvas
 
         // Store canvas safely
         originalCanvasesRef.current[id - 1] = canvas;
@@ -173,7 +173,6 @@ function FTMixer() {
   const handleCancel = useCallback(() => {
     // Implement cancel logic here
   }, []);
-  const hasImages = images.some((img) => img.grayscale !== null);
 
   return (
     <div className="ft-mixer-layout">
@@ -200,7 +199,6 @@ function FTMixer() {
         onCancel={handleCancel}
         isProcessing={isProcessing}
         progress={progress}
-        hasImages={hasImages}
         loadedImageIndices={loadedImageIndices}
       />
 

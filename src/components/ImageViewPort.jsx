@@ -9,7 +9,6 @@ function ImageViewPort({
   id,
   title,
   grayscale,
-  outputImage,
   ftMagnitude,
   ftPhase,
   ftReal,
@@ -43,7 +42,7 @@ function ImageViewPort({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   // For output mode, use outputImage; for input mode, use grayscale
-  const imageData = isOutput ? outputImage : grayscale;
+  const imageData = grayscale;
   useEffect(() => {
     if (!imageCanvasRef.current || !imageData || width === 0 || height === 0)
       return;
@@ -52,22 +51,12 @@ function ImageViewPort({
     canvas.width = width;
     canvas.height = height;
 
-    if (isOutput && outputImage) {
-      // Normalize Float64Array for display
-      const normalized = normalizeForDisplay(outputImage, false);
-      const adjusted = applyBrightnessContrast(
-        normalized,
-        brightness,
-        contrast
-      );
-      const imgData = grayscaleToImageData(adjusted, width, height);
-      ctx.putImageData(imgData, 0, 0);
-    } else if (grayscale) {
-      const adjusted = applyBrightnessContrast(grayscale, brightness, contrast);
-      const imgData = grayscaleToImageData(adjusted, width, height);
-      ctx.putImageData(imgData, 0, 0);
-    }
-  }, [grayscale, outputImage, isOutput, width, height, brightness, contrast]);
+    // Normalize Float64Array for display
+    const normalized = normalizeForDisplay(grayscale, false);
+    const adjusted = applyBrightnessContrast(normalized, brightness, contrast);
+    const imgData = grayscaleToImageData(adjusted, width, height);
+    ctx.putImageData(imgData, 0, 0);
+  }, [grayscale, isOutput, width, height, brightness, contrast]);
   useEffect(() => {
     if (!ftCanvasRef.current || paddedWidth === 0 || paddedHeight === 0) return;
     let data = null;
@@ -203,7 +192,7 @@ function ImageViewPort({
     displayWidth > 0
       ? { width: displayWidth, height: displayHeight }
       : undefined;
-  const hasImage = isOutput ? outputImage !== null : grayscale !== null;
+  const hasImage = grayscale !== null;
   const emptyText = isOutput
     ? "Output will appear here"
     : "Double-click to load image";

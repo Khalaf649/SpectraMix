@@ -10,11 +10,10 @@ function OutputViewPorts({
       {[1, 2].map((id) => {
         return (
           <ImageViewPort
-            grayscale={null}
+            grayscale={outputs[id - 1].grayscale}
             key={id}
             id={id}
             title={`Output ${id}`}
-            outputImage={outputs[id - 1].image}
             ftMagnitude={outputs[id - 1].ftMagnitude}
             ftPhase={outputs[id - 1].ftPhase}
             ftReal={outputs[id - 1].ftReal}

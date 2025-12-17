@@ -1,190 +1,5 @@
 // FFT Implementation for 2D Image Processing
-
-export function fft1d(real, imag) {
-  const n = real.length;
-  if (n <= 1) return;
-
-  // Bit reversal
-  let j = 0;
-  for (let i = 0; i < n - 1; i++) {
-    if (i < j) {
-      [real[i], real[j]] = [real[j], real[i]];
-      [imag[i], imag[j]] = [imag[j], imag[i]];
-    }
-    let k = n >> 1;
-    while (k <= j) {
-      j -= k;
-      k >>= 1;
-    }
-    j += k;
-  }
-
-  // Cooley-Tukey FFT
-  for (let len = 2; len <= n; len <<= 1) {
-    const halfLen = len >> 1;
-    const angle = (-2 * Math.PI) / len;
-    const wReal = Math.cos(angle);
-    const wImag = Math.sin(angle);
-
-    for (let i = 0; i < n; i += len) {
-      let curReal = 1;
-      let curImag = 0;
-
-      for (let k = 0; k < halfLen; k++) {
-        const evenIdx = i + k;
-        const oddIdx = i + k + halfLen;
-
-        const tReal = curReal * real[oddIdx] - curImag * imag[oddIdx];
-        const tImag = curReal * imag[oddIdx] + curImag * real[oddIdx];
-
-        real[oddIdx] = real[evenIdx] - tReal;
-        imag[oddIdx] = imag[evenIdx] - tImag;
-        real[evenIdx] += tReal;
-        imag[evenIdx] += tImag;
-
-        const newReal = curReal * wReal - curImag * wImag;
-        curImag = curReal * wImag + curImag * wReal;
-        curReal = newReal;
-      }
-    }
-  }
-}
-
-export function ifft1d(real, imag) {
-  const n = real.length;
-
-  // Conjugate
-  for (let i = 0; i < n; i++) {
-    imag[i] = -imag[i];
-  }
-
-  // Forward FFT
-  fft1d(real, imag);
-
-  // Conjugate and scale
-  for (let i = 0; i < n; i++) {
-    real[i] /= n;
-    imag[i] = -imag[i] / n;
-  }
-}
-
-export function fft2d(data, width, height) {
-  const real = new Float64Array(data);
-  const imag = new Float64Array(width * height);
-
-  // FFT on rows
-  for (let y = 0; y < height; y++) {
-    const rowReal = new Float64Array(width);
-    const rowImag = new Float64Array(width);
-
-    for (let x = 0; x < width; x++) {
-      rowReal[x] = real[y * width + x];
-      rowImag[x] = imag[y * width + x];
-    }
-
-    fft1d(rowReal, rowImag);
-
-    for (let x = 0; x < width; x++) {
-      real[y * width + x] = rowReal[x];
-      imag[y * width + x] = rowImag[x];
-    }
-  }
-
-  // FFT on columns
-  for (let x = 0; x < width; x++) {
-    const colReal = new Float64Array(height);
-    const colImag = new Float64Array(height);
-
-    for (let y = 0; y < height; y++) {
-      colReal[y] = real[y * width + x];
-      colImag[y] = imag[y * width + x];
-    }
-
-    fft1d(colReal, colImag);
-
-    for (let y = 0; y < height; y++) {
-      real[y * width + x] = colReal[y];
-      imag[y * width + x] = colImag[y];
-    }
-  }
-
-  return { real, imag };
-}
-
-export function ifft2d(real, imag, width, height) {
-  const resultReal = new Float64Array(real);
-  const resultImag = new Float64Array(imag);
-
-  // IFFT on rows
-  for (let y = 0; y < height; y++) {
-    const rowReal = new Float64Array(width);
-    const rowImag = new Float64Array(width);
-
-    for (let x = 0; x < width; x++) {
-      rowReal[x] = resultReal[y * width + x];
-      rowImag[x] = resultImag[y * width + x];
-    }
-
-    ifft1d(rowReal, rowImag);
-
-    for (let x = 0; x < width; x++) {
-      resultReal[y * width + x] = rowReal[x];
-      resultImag[y * width + x] = rowImag[x];
-    }
-  }
-
-  // IFFT on columns
-  for (let x = 0; x < width; x++) {
-    const colReal = new Float64Array(height);
-    const colImag = new Float64Array(height);
-
-    for (let y = 0; y < height; y++) {
-      colReal[y] = resultReal[y * width + x];
-      colImag[y] = resultImag[y * width + x];
-    }
-
-    ifft1d(colReal, colImag);
-
-    for (let y = 0; y < height; y++) {
-      resultReal[y * width + x] = colReal[y];
-      resultImag[y * width + x] = colImag[y];
-    }
-  }
-
-  return resultReal;
-}
-
-export function fftShift(data, width, height) {
-  const result = new Float64Array(data.length);
-  const halfW = Math.floor(width / 2);
-  const halfH = Math.floor(height / 2);
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const newX = (x + halfW) % width;
-      const newY = (y + halfH) % height;
-      result[newY * width + newX] = data[y * width + x];
-    }
-  }
-
-  return result;
-}
-
-export function ifftShift(data, width, height) {
-  const result = new Float64Array(data.length);
-  const halfW = Math.ceil(width / 2);
-  const halfH = Math.ceil(height / 2);
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const newX = (x + halfW) % width;
-      const newY = (y + halfH) % height;
-      result[newY * width + newX] = data[y * width + x];
-    }
-  }
-
-  return result;
-}
+import FFT from "fft.js";
 
 export function computeMagnitude(real, imag) {
   const result = new Float64Array(real.length);
@@ -200,18 +15,6 @@ export function computePhase(real, imag) {
     result[i] = Math.atan2(imag[i], real[i]);
   }
   return result;
-}
-
-export function polarToCartesian(magnitude, phase) {
-  const real = new Float64Array(magnitude.length);
-  const imag = new Float64Array(magnitude.length);
-
-  for (let i = 0; i < magnitude.length; i++) {
-    real[i] = magnitude[i] * Math.cos(phase[i]);
-    imag[i] = magnitude[i] * Math.sin(phase[i]);
-  }
-
-  return { real, imag };
 }
 
 export function nextPowerOf2(n) {
@@ -235,3 +38,110 @@ export function padToPowerOf2(data, width, height) {
 
   return { padded, newWidth, newHeight };
 }
+
+/**
+ * Performs 2D FFT and FFT-Shift.
+ *
+ * @param {Float32Array|Array} grayScale - Flat array of image intensity (0-255).
+ * @param {number} width - Image width (Must be power of 2).
+ * @param {number} height - Image height (Must be power of 2).
+ * @returns {Object} { real: Float32Array, imag: Float32Array } - Shifted frequency data.
+ */
+export const fft2d = (grayScale, width, height) => {
+  const size = width * height;
+  console.log("Performing __fft2d on size:", width, "x", height);
+
+  // 1. Initialize Real & Imaginary arrays
+  // We copy grayScale into 'real' to avoid mutating the original input
+  const real = new Float32Array(size);
+  const imag = new Float32Array(size);
+
+  for (let i = 0; i < size; i++) {
+    // parse the real and the imaginary parts
+    real[i] = grayScale[i];
+    imag[i] = 0;
+  }
+
+  // =========================================================
+  // STEP 1: FFT on Rows (Horizontal)
+  // =========================================================
+  const fftRow = new FFT(width);
+  const rowIn = fftRow.createComplexArray();
+  const rowOut = fftRow.createComplexArray();
+
+  for (let y = 0; y < height; y++) {
+    const offset = y * width;
+
+    // Fill input buffer for this row
+    for (let x = 0; x < width; x++) {
+      rowIn[2 * x] = real[offset + x];
+      rowIn[2 * x + 1] = imag[offset + x];
+    }
+
+    // Perform Transform
+    fftRow.transform(rowOut, rowIn);
+
+    // Write back to main arrays
+    for (let x = 0; x < width; x++) {
+      real[offset + x] = rowOut[2 * x];
+      imag[offset + x] = rowOut[2 * x + 1];
+    }
+  }
+
+  // =========================================================
+  // STEP 2: FFT on Columns (Vertical)
+  // =========================================================
+  const fftCol = new FFT(height);
+  const colIn = fftCol.createComplexArray();
+  const colOut = fftCol.createComplexArray();
+
+  for (let x = 0; x < width; x++) {
+    // Fill input buffer for this column
+    for (let y = 0; y < height; y++) {
+      const idx = y * width + x;
+      colIn[2 * y] = real[idx];
+      colIn[2 * y + 1] = imag[idx];
+    }
+
+    // Perform Transform
+    fftCol.transform(colOut, colIn);
+
+    // Write back to main arrays
+    for (let y = 0; y < height; y++) {
+      const idx = y * width + x;
+      real[idx] = colOut[2 * y];
+      imag[idx] = colOut[2 * y + 1];
+    }
+  }
+
+  // =========================================================
+  // STEP 3: FFT Shift (Center Low Frequencies)
+  // We swap Quadrant 1 with 4, and Quadrant 2 with 3.
+  // =========================================================
+  const shiftedReal = new Float32Array(size);
+  const shiftedImag = new Float32Array(size);
+
+  const halfW = width / 2;
+  const halfH = height / 2;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      // Calculate current index
+      const currentIdx = y * width + x;
+
+      // Calculate target index (shifting by half width/height)
+      const newY = (y + halfH) % height;
+      const newX = (x + halfW) % width;
+      const targetIdx = newY * width + newX;
+
+      // Move data
+      shiftedReal[targetIdx] = real[currentIdx];
+      shiftedImag[targetIdx] = imag[currentIdx];
+    }
+  }
+
+  return {
+    real: shiftedReal,
+    imag: shiftedImag,
+  };
+};
