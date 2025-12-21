@@ -4,7 +4,7 @@ function InputViewPorts({
   handleImageLoad,
   mixerMode,
   regionSettings,
-  unifiedSize,
+  setRegionSettings,
 }) {
   return (
     <div className="ft-mixer-grid">
@@ -23,8 +23,8 @@ function InputViewPorts({
           paddedWidth={images[id - 1].paddedWidth}
           paddedHeight={images[id - 1].paddedHeight}
           onImageLoad={handleImageLoad}
-          regionPercentage={mixerMode === "region" ? regionSettings.size : 0}
-          regionType={regionSettings.isInner ? "inner" : "outer"}
+          setRegionSettings={setRegionSettings}
+          regionSettings={regionSettings}
           showRegion={
             mixerMode === "region" && images[id - 1].grayscale !== null
           }

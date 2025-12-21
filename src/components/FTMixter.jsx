@@ -10,9 +10,10 @@ import {
   imageToCanvas,
   unifiedMixer,
 } from "../utils/imageProcessing.js";
-import { Ifft2d, computeMagnitude, computePhase } from "../utils/fft.js";
+import { Ifft2d } from "../utils/fft.js";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+
 function FTMixer() {
   const initialImageState = {
     grayscale: null,
@@ -26,9 +27,7 @@ function FTMixer() {
     ftImaginary: null,
   };
 
-  const initialOutputState = {
-    ...initialImageState,
-  };
+  const initialOutputState = { ...initialImageState };
 
   const initalWeights = [
     { component1Gain: 0.25, component2Gain: 0.25 },
@@ -36,7 +35,15 @@ function FTMixer() {
     { component1Gain: 0.25, component2Gain: 0.25 },
     { component1Gain: 0.25, component2Gain: 0.25 },
   ];
-  const initialRegionSettings = { size: 50, region: "inner" };
+
+  // Refactored: size removed, coordinates added
+  const [regionSettings, setRegionSettings] = useState({
+    startX: 0,
+    startY: 0,
+    endX: 0,
+    endY: 0,
+    isInner: true,
+  });
 
   const [images, setImages] = useState([
     { ...initialImageState },
@@ -50,16 +57,13 @@ function FTMixer() {
     { ...initialOutputState },
     { ...initialOutputState },
   ]);
+
   const [mixerMode, setMixerMode] = useState("component");
   const [selectedOutput, setSelectedOutput] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
   const [componentType, setComponentType] = useState("Mag/Phase");
-  const [regionSettings, setRegionSettings] = useState({
-    size: 50,
-    isInner: true,
-  });
-  const abortControllerRef = useRef(null);
 
+  const abortControllerRef = useRef(null);
   const [unifiedSize, setUnifiedSize] = useState({ width: 0, height: 0 });
   const originalCanvasesRef = useRef([null, null, null, null]);
 
@@ -70,7 +74,6 @@ function FTMixer() {
       return;
     }
 
-    // Find the image with the smallest area
     let smallest = loadedImages[0];
     let smallestArea = smallest.width * smallest.height;
 
@@ -82,7 +85,6 @@ function FTMixer() {
         smallestArea = area;
       }
     }
-    // Set unified size to the dimensions of the smallest image
     setUnifiedSize({ width: smallest.width, height: smallest.height });
   }, []);
 
@@ -97,61 +99,53 @@ function FTMixer() {
   useEffect(() => {
     if (unifiedSize.width === 0 || unifiedSize.height === 0) return;
     const processAll = async () => {
-      const newImages = [...images];
-      for (let i = 0; i < 4; i++) {
-        const canvas = originalCanvasesRef.current[i];
-        if (!canvas) continue;
-        const resizedCanvas = resizeCanvas(
-          canvas,
-          unifiedSize.width,
-          unifiedSize.height
-        );
-        const { grayscale, width, height } = canvasToGrayscale(resizedCanvas);
-        console.log(
-          `the dimensions of the spatial domain of the image ${i + 1} :`,
-          width,
-          height
-        );
-        const fftResult = computeFFT(grayscale, width, height);
-        console.log("the components of the frequency domain:", fftResult.phase);
+      setImages((prev) => {
+        const next = [...prev];
+        for (let i = 0; i < 4; i++) {
+          const canvas = originalCanvasesRef.current[i];
+          if (!canvas) continue;
+          const resizedCanvas = resizeCanvas(
+            canvas,
+            unifiedSize.width,
+            unifiedSize.height
+          );
+          const { grayscale, width, height } = canvasToGrayscale(resizedCanvas);
+          const fftResult = computeFFT(grayscale, width, height);
 
-        newImages[i] = {
-          grayscale,
-          width,
-          height,
-          paddedWidth: fftResult.paddedWidth,
-          paddedHeight: fftResult.paddedHeight,
-          ftMagnitude: fftResult.magnitude,
-          ftPhase: fftResult.phase,
-          ftReal: fftResult.real,
-          ftImaginary: fftResult.imaginary,
-        };
-      }
-      setImages(newImages);
+          next[i] = {
+            grayscale,
+            width,
+            height,
+            paddedWidth: fftResult.paddedWidth,
+            paddedHeight: fftResult.paddedHeight,
+            ftMagnitude: fftResult.magnitude,
+            ftPhase: fftResult.phase,
+            ftReal: fftResult.real,
+            ftImaginary: fftResult.imaginary,
+          };
+        }
+        return next;
+      });
     };
 
     processAll();
   }, [unifiedSize]);
 
-  // Inside your component
   const handleImageLoad = useCallback(
     async (id, file) => {
       try {
-        const img = await loadImage(file); // htmlImageElement
-        const canvas = imageToCanvas(img); // draw image to canvas
-
-        // Store canvas safely
+        const img = await loadImage(file);
+        const canvas = imageToCanvas(img);
         originalCanvasesRef.current[id - 1] = canvas;
-
-        // Update unified size AFTER canvas is stored
         handleUnifySize();
       } catch (error) {
         console.error(error);
       }
     },
-    [handleUnifySize] // ✅ dependency
+    [handleUnifySize]
   );
 
+  // Still useful for MixerControls to toggle isInner
   const handleRegionSetting = useCallback((key, value) => {
     setRegionSettings((prev) => ({
       ...prev,
@@ -162,10 +156,7 @@ function FTMixer() {
   const handleWeights = useCallback((index, key, value) => {
     setWeights((prev) => {
       const newWeights = [...prev];
-      newWeights[index] = {
-        ...newWeights[index],
-        [key]: value,
-      };
+      newWeights[index] = { ...newWeights[index], [key]: value };
       return newWeights;
     });
   }, []);
@@ -177,7 +168,6 @@ function FTMixer() {
       return;
     }
 
-    // Create new abort controller for this operation
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
 
@@ -185,67 +175,54 @@ function FTMixer() {
     const pWidth = loadedImages[0].paddedWidth;
     const pHeight = loadedImages[0].paddedHeight;
 
-    // --- Logic for mode switching ---
     const isRegionMode = mixerMode === "region";
 
     let startX, endX, startY, endY, activeInner;
 
     if (isRegionMode) {
-      const { size, isInner } = regionSettings;
-      const regionW = (pWidth * size) / 100;
-      const regionH = (pHeight * size) / 100;
-      const centerX = pWidth / 2;
-      const centerY = pHeight / 2;
+      // Use coordinates directly from state
+      startX = Math.max(0, Math.min(pWidth, Math.floor(regionSettings.startX)));
+      startY = Math.max(
+        0,
+        Math.min(pHeight, Math.floor(regionSettings.startY))
+      );
+      endX = Math.max(0, Math.min(pWidth, Math.floor(regionSettings.endX)));
+      endY = Math.max(0, Math.min(pHeight, Math.floor(regionSettings.endY)));
 
-      startX = Math.floor(centerX - regionW / 2);
-      endX = Math.floor(centerX + regionW / 2);
-      startY = Math.floor(centerY - regionH / 2);
-      endY = Math.floor(centerY + regionH / 2);
-      activeInner = isInner;
+      if (endX < startX) [startX, endX] = [endX, startX];
+      if (endY < startY) [startY, endY] = [endY, startY];
+      activeInner = regionSettings.isInner;
     } else {
-      // "component" mode: Use the full range
       startX = 0;
       endX = pWidth;
       startY = 0;
       endY = pHeight;
-      activeInner = true; // Always true to process the whole image
+      activeInner = true;
     }
 
     setIsProcessing(true);
 
     try {
-      // Check if cancelled
       if (signal.aborted) throw new Error("Operation cancelled");
-
-      // 1. Perform mixing in frequency domain
-      await new Promise((resolve) => setTimeout(resolve, 0)); // Allow UI update
-
-      if (signal.aborted) throw new Error("Operation cancelled");
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       const { ftReal, ftImaginary, ftMagnitude, ftPhase } = unifiedMixer(
         loadedImages,
         loadedWeights,
         componentType,
-        activeInner, // Use the resolved inner/outer state
+        activeInner,
         startX,
         startY,
         endX,
         endY
       );
-      console.log("Mixed Frequency Domain:", ftReal, ftImaginary);
-
-      await new Promise((resolve) => setTimeout(resolve, 0)); // Allow UI update
 
       if (signal.aborted) throw new Error("Operation cancelled");
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-      // 2. Perform Inverse FFT
       const paddedReconstructed = Ifft2d(ftReal, ftImaginary, pWidth, pHeight);
 
-      await new Promise((resolve) => setTimeout(resolve, 0)); // Allow UI update
-
       if (signal.aborted) throw new Error("Operation cancelled");
-      // 2. CROP: Extract the original dimensions (e.g., 300x400) from the padded result
-      // We only want the pixels from (0,0) up to (unifiedSize.width, unifiedSize.height)
 
       const croppedGrayscale = new Float32Array(
         unifiedSize.width * unifiedSize.height
@@ -253,15 +230,12 @@ function FTMixer() {
 
       for (let y = 0; y < unifiedSize.height; y++) {
         for (let x = 0; x < unifiedSize.width; x++) {
-          // Map 2D coordinate to the padded 1D array index
           const paddedIdx = y * pWidth + x;
-          // Map 2D coordinate to the new cropped 1D array index
           const croppedIdx = y * unifiedSize.width + x;
           croppedGrayscale[croppedIdx] = paddedReconstructed[paddedIdx];
         }
       }
 
-      // 3. Update the selected output
       setOutputs((prev) => {
         const newOutputs = [...prev];
         const idx = selectedOutput - 1;
@@ -280,16 +254,13 @@ function FTMixer() {
         return newOutputs;
       });
     } catch (error) {
-      if (error.message === "Operation cancelled") {
-        console.log("Mixing cancelled by user");
-      } else {
+      if (error.message !== "Operation cancelled") {
         console.error("Mixing Error:", error);
       }
     } finally {
       setIsProcessing(false);
       abortControllerRef.current = null;
     }
-    // Added mixerMode and regionSettings to dependencies
   }, [
     images,
     weights,
@@ -297,6 +268,7 @@ function FTMixer() {
     mixerMode,
     regionSettings,
     selectedOutput,
+    unifiedSize,
   ]);
 
   const handleCancel = useCallback(() => {
@@ -313,7 +285,7 @@ function FTMixer() {
         handleImageLoad={handleImageLoad}
         mixerMode={mixerMode}
         regionSettings={regionSettings}
-        unifiedSize={unifiedSize}
+        setRegionSettings={setRegionSettings} // Passed for mouse interaction
       />
 
       <MixerControls
@@ -341,4 +313,5 @@ function FTMixer() {
     </div>
   );
 }
+
 export default FTMixer;

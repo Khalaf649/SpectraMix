@@ -5,6 +5,7 @@ import {
 } from "../utils/imageProcessing";
 import { useRef, useState, useEffect, useCallback } from "react";
 import SelectBox from "./UI/SelectBox";
+
 function ImageViewPort({
   id,
   title,
@@ -18,48 +19,54 @@ function ImageViewPort({
   paddedWidth,
   paddedHeight,
   onImageLoad,
-  regionPercentage = 50,
-  regionType = "inner",
+  regionSettings,
+  setRegionSettings,
   showRegion = false,
   isOutput = false,
   isSelected = false,
   onSelect,
 }) {
-  const displayWidth = width;
-  const displayHeight = height;
   const imageCanvasRef = useRef(null);
   const ftCanvasRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const [ftComponent, setFtComponent] = useState("FT Magnitude");
+
+  // Brightness/Contrast State
   const [brightness, setBrightness] = useState(0);
   const [contrast, setContrast] = useState(0);
   const [ftBrightness, setFtBrightness] = useState(0);
   const [ftContrast, setFtContrast] = useState(0);
+
+  // Dragging State
   const [isDragging, setIsDragging] = useState(false);
   const [isFtDragging, setIsFtDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  if (isOutput)
-    console.log(
-      "PaddedWidth: " + paddedWidth + " PaddedHeight: " + paddedHeight
-    );
-  const imageData = grayscale;
+
+  // ---------------------------------------------------------
+  // 1. Render Spatial Domain Canvas
+  // ---------------------------------------------------------
   useEffect(() => {
-    if (!imageCanvasRef.current || !imageData || width === 0 || height === 0)
+    if (!imageCanvasRef.current || !grayscale || width === 0 || height === 0)
       return;
+
     const canvas = imageCanvasRef.current;
     const ctx = canvas.getContext("2d");
-    canvas.width = displayWidth;
-    canvas.height = displayHeight;
+    canvas.width = width;
+    canvas.height = height;
 
-    // Normalize Float64Array for display
     const normalized = normalizeForDisplay(grayscale, false);
     const adjusted = applyBrightnessContrast(normalized, brightness, contrast);
-    const imgData = grayscaleToImageData(adjusted, displayWidth, displayHeight);
+    const imgData = grayscaleToImageData(adjusted, width, height);
     ctx.putImageData(imgData, 0, 0);
-  }, [grayscale, isOutput, width, height, brightness, contrast]);
+  }, [grayscale, width, height, brightness, contrast]);
+
+  // ---------------------------------------------------------
+  // 2. Render Frequency Domain Canvas + Region Overlay
+  // ---------------------------------------------------------
   useEffect(() => {
     if (!ftCanvasRef.current || paddedWidth === 0 || paddedHeight === 0) return;
+
     let data = null;
     let useLog = true;
     switch (ftComponent) {
@@ -78,54 +85,77 @@ function ImageViewPort({
         data = ftImaginary;
         useLog = false;
         break;
+      default:
+        break;
     }
 
     if (!data) return;
+
     const canvas = ftCanvasRef.current;
     const ctx = canvas.getContext("2d");
     canvas.width = paddedWidth;
     canvas.height = paddedHeight;
+
     const normalized = normalizeForDisplay(data, useLog);
     const adjusted = applyBrightnessContrast(
       normalized,
       ftBrightness,
       ftContrast
     );
+    const imgDataObj = grayscaleToImageData(
+      adjusted,
+      paddedWidth,
+      paddedHeight
+    );
+    ctx.putImageData(imgDataObj, 0, 0);
 
-    const imageData = grayscaleToImageData(adjusted, paddedWidth, paddedHeight);
-    ctx.putImageData(imageData, 0, 0);
+    // Draw Region Overlay
+    if (showRegion && regionSettings) {
+      let { startX, startY, endX, endY, isInner } = regionSettings;
 
-    if (showRegion && regionPercentage > 0) {
-      const regionWidth = (paddedWidth * regionPercentage) / 100;
-      const regionHeight = (paddedHeight * regionPercentage) / 100;
-      const startX = (paddedWidth - regionWidth) / 2;
-      const startY = (paddedHeight - regionHeight) / 2;
-      ctx.fillStyle =
-        regionType === "inner"
-          ? "rgba(0, 200, 255, 0.3)"
-          : "rgba(255, 100, 200, 0.3)";
-      if (regionType === "inner") {
-        ctx.fillRect(startX, startY, regionWidth, regionHeight);
-      } else {
-        ctx.fillRect(0, 0, paddedWidth, startY);
-        ctx.fillRect(
-          0,
-          startY + regionHeight,
-          paddedWidth,
-          paddedHeight - startY - regionHeight
-        );
-        ctx.fillRect(0, startY, startX, regionHeight);
-        ctx.fillRect(
-          startX + regionWidth,
-          startY,
-          paddedWidth - startX - regionWidth,
-          regionHeight
-        );
+      // Handle initialization if state is empty
+      if (endX <= startX || endY <= startY) {
+        const defW = Math.floor(paddedWidth * 0.4);
+        const defH = Math.floor(paddedHeight * 0.4);
+        startX = Math.floor((paddedWidth - defW) / 2);
+        startY = Math.floor((paddedHeight - defH) / 2);
+        endX = startX + defW;
+        endY = startY + defH;
       }
-      ctx.strokeStyle =
-        regionType === "inner" ? "hsl(190, 95%, 55%)" : "hsl(300, 80%, 60%)";
+
+      const rw = endX - startX;
+      const rh = endY - startY;
+
+      // Fill Overlay
+      ctx.fillStyle = isInner
+        ? "rgba(0, 200, 255, 0.25)"
+        : "rgba(255, 100, 200, 0.25)";
+      if (isInner) {
+        ctx.fillRect(startX, startY, rw, rh);
+      } else {
+        // High-pass visualization (shade the corners/outside)
+        ctx.beginPath();
+        ctx.rect(0, 0, paddedWidth, paddedHeight);
+        ctx.rect(startX, startY, rw, rh);
+        ctx.fill("evenodd");
+      }
+
+      // Border
+      ctx.strokeStyle = isInner ? "#00c8ff" : "#ff64c8";
       ctx.lineWidth = 2;
-      ctx.strokeRect(startX, startY, regionWidth, regionHeight);
+      ctx.strokeRect(startX, startY, rw, rh);
+
+      // Handles
+      const hSize = 10;
+      ctx.fillStyle = "white";
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = 1;
+      // Top-Left Handle
+      ctx.fillRect(startX - hSize / 2, startY - hSize / 2, hSize, hSize);
+      ctx.strokeRect(startX - hSize / 2, startY - hSize / 2, hSize, hSize);
+      // Bottom-Right Handle
+      ctx.fillRect(endX - hSize / 2, endY - hSize / 2, hSize, hSize);
+      ctx.strokeRect(endX - hSize / 2, endY - hSize / 2, hSize, hSize);
     }
   }, [
     ftComponent,
@@ -138,26 +168,111 @@ function ImageViewPort({
     ftBrightness,
     ftContrast,
     showRegion,
-    regionPercentage,
-    regionType,
+    regionSettings,
   ]);
-  const handleDoubleClick = useCallback(() => {
-    if (!isOutput) fileInputRef.current?.click();
-  }, [isOutput]);
 
-  const handleFileChange = useCallback(
-    (e) => {
-      const file = e.target.files?.[0];
-      if (file && onImageLoad) onImageLoad(id, file);
-      e.target.value = "";
-    },
-    [id, onImageLoad]
-  );
+  // ---------------------------------------------------------
+  // 3. Pointer Handlers (Frequency Domain)
+  // ---------------------------------------------------------
+  const handleFtPointerDown = (e) => {
+    if (showRegion && regionSettings && ftCanvasRef.current) {
+      const rect = ftCanvasRef.current.getBoundingClientRect();
+      const scaleX = paddedWidth / rect.width;
+      const scaleY = paddedHeight / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
 
-  const handleClick = useCallback(() => {
-    if (isOutput && onSelect) onSelect(id);
-  }, [isOutput, onSelect, id]);
+      const { startX: sx, startY: sy, endX: ex, endY: ey } = regionSettings;
+      const handleTolerance = 15;
 
+      let mode = null;
+      if (
+        Math.abs(x - sx) < handleTolerance &&
+        Math.abs(y - sy) < handleTolerance
+      ) {
+        mode = "resize-tl";
+      } else if (
+        Math.abs(x - ex) < handleTolerance &&
+        Math.abs(y - ey) < handleTolerance
+      ) {
+        mode = "resize-br";
+      } else if (x >= sx && x <= ex && y >= sy && y <= ey) {
+        mode = "move";
+      }
+
+      if (mode) {
+        e.preventDefault();
+        ftCanvasRef.current.setPointerCapture(e.pointerId);
+        ftCanvasRef.current.__dragMode = mode;
+        ftCanvasRef.current.__dragStart = { x, y };
+        return;
+      }
+    }
+
+    // Fallback: Brightness/Contrast
+    setIsFtDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleFtPointerMove = (e) => {
+    const canvas = ftCanvasRef.current;
+    if (showRegion && canvas?.__dragMode && canvas.__dragStart) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = paddedWidth / rect.width;
+      const scaleY = paddedHeight / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+
+      const dx = x - canvas.__dragStart.x;
+      const dy = y - canvas.__dragStart.y;
+      const minSize = 10;
+
+      setRegionSettings((prev) => {
+        let { startX, startY, endX, endY } = prev;
+        if (canvas.__dragMode === "move") {
+          const w = endX - startX;
+          const h = endY - startY;
+          startX = Math.max(0, Math.min(paddedWidth - w, startX + dx));
+          startY = Math.max(0, Math.min(paddedHeight - h, startY + dy));
+          endX = startX + w;
+          endY = startY + h;
+        } else if (canvas.__dragMode === "resize-tl") {
+          startX = Math.max(0, Math.min(endX - minSize, startX + dx));
+          startY = Math.max(0, Math.min(endY - minSize, startY + dy));
+        } else if (canvas.__dragMode === "resize-br") {
+          endX = Math.min(paddedWidth, Math.max(startX + minSize, endX + dx));
+          endY = Math.min(paddedHeight, Math.max(startY + minSize, endY + dy));
+        }
+        return { ...prev, startX, startY, endX, endY };
+      });
+
+      canvas.__dragStart = { x, y };
+      return;
+    }
+
+    if (!isFtDragging) return;
+    const dxp = e.clientX - dragStart.x;
+    const dyp = e.clientY - dragStart.y;
+    setFtContrast((prev) => Math.max(-100, Math.min(100, prev + dxp * 0.5)));
+    setFtBrightness((prev) => Math.max(-100, Math.min(100, prev - dyp * 0.5)));
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleFtPointerUp = (e) => {
+    const canvas = ftCanvasRef.current;
+    if (canvas?.__dragMode) {
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch {}
+      canvas.__dragMode = null;
+      canvas.__dragStart = null;
+    }
+    setIsFtDragging(false);
+  };
+
+  // ---------------------------------------------------------
+  // 4. Mouse Handlers (Spatial Domain)
+  // ---------------------------------------------------------
   const handleImageMouseDown = (e) => {
     setIsDragging(true);
     setDragStart({ x: e.clientX, y: e.clientY });
@@ -174,37 +289,29 @@ function ImageViewPort({
 
   const handleImageMouseUp = () => setIsDragging(false);
 
-  const handleFtMouseDown = (e) => {
-    setIsFtDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
+  // ---------------------------------------------------------
+  // 5. General Helpers
+  // ---------------------------------------------------------
+  const handleDoubleClick = () => {
+    if (!isOutput) fileInputRef.current?.click();
   };
 
-  const handleFtMouseMove = (e) => {
-    if (!isFtDragging) return;
-    const dx = e.clientX - dragStart.x;
-    const dy = e.clientY - dragStart.y;
-    setFtContrast((prev) => Math.max(-100, Math.min(100, prev + dx * 0.5)));
-    setFtBrightness((prev) => Math.max(-100, Math.min(100, prev - dy * 0.5)));
-    setDragStart({ x: e.clientX, y: e.clientY });
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file && onImageLoad) onImageLoad(id, file);
+    e.target.value = "";
   };
 
-  const handleFtMouseUp = () => setIsFtDragging(false);
-
-  const canvasStyle =
-    displayWidth > 0
-      ? { width: displayWidth, height: displayHeight }
-      : undefined;
   const hasImage = grayscale !== null;
-  const emptyText = isOutput
-    ? "Output will appear here"
-    : "Double-click to load image";
-  const emptyTextClass = isOutput ? "text-signal-magenta" : "text-signal-cyan";
+  const canvasStyle = width > 0 ? { width: "100%", height: "auto" } : undefined;
+
   return (
     <div
-      onClick={handleClick}
-      className={`viewport animate-fade-in viewport-container ${
+      onClick={() => isOutput && onSelect?.(id)}
+      className={`viewport viewport-container ${
         isOutput ? "cursor-pointer" : ""
-      } ${isOutput && isSelected ? "output-viewport-selected" : ""}`}
+      } 
+        ${isOutput && isSelected ? "output-viewport-selected" : ""}`}
     >
       <div
         className={`viewport-header ${
@@ -212,20 +319,18 @@ function ImageViewPort({
         }`}
       >
         <span className="text-sm font-medium text-foreground flex items-center gap-2">
-          {title}
+          {title}{" "}
           {isOutput && isSelected && (
             <span className="active-badge">Active</span>
           )}
         </span>
         <span className="data-label">
-          {displayWidth > 0
-            ? `${displayWidth}×${displayHeight}`
-            : isOutput
-            ? "No output"
-            : "No image"}
+          {width > 0 ? `${width}×${height}` : "No image"}
         </span>
       </div>
+
       <div className="viewport-body">
+        {/* Spatial Canvas */}
         <div
           className="viewport-canvas-area"
           onDoubleClick={handleDoubleClick}
@@ -242,7 +347,15 @@ function ImageViewPort({
             />
           ) : (
             <div className="viewport-empty-text">
-              <p className={emptyTextClass}>{emptyText}</p>
+              <p
+                className={
+                  isOutput ? "text-signal-magenta" : "text-signal-cyan"
+                }
+              >
+                {isOutput
+                  ? "Output will appear here"
+                  : "Double-click to load image"}
+              </p>
             </div>
           )}
           {hasImage && (
@@ -251,6 +364,8 @@ function ImageViewPort({
             </div>
           )}
         </div>
+
+        {/* Frequency Canvas */}
         <div className="viewport-ft-section">
           <div className="viewport-ft-header">
             <SelectBox
@@ -263,10 +378,11 @@ function ImageViewPort({
 
           <div
             className="viewport-canvas-area"
-            onMouseDown={handleFtMouseDown}
-            onMouseMove={handleFtMouseMove}
-            onMouseUp={handleFtMouseUp}
-            onMouseLeave={handleFtMouseUp}
+            style={{ touchAction: "none" }} // Prevents scrolling while dragging on touch
+            onPointerDown={handleFtPointerDown}
+            onPointerMove={handleFtPointerMove}
+            onPointerUp={handleFtPointerUp}
+            onPointerLeave={handleFtPointerUp}
           >
             {ftMagnitude ? (
               <canvas
@@ -300,4 +416,5 @@ function ImageViewPort({
     </div>
   );
 }
+
 export default ImageViewPort;

@@ -64,19 +64,6 @@ function MixerControls({
         {mixerMode === "region" && loadedImageIndices.length > 0 && (
           <div className="mixer-weights-list">
             <div className="region-shared-controls">
-              <div className="region-slider-row">
-                <div className="region-slider-header">
-                  <span className="region-slider-label">Region Size</span>
-                  <span className="region-value">{regionSettings.size}%</span>
-                </div>
-                <Slider
-                  value={regionSettings.size}
-                  onChange={(v) => onRegionSettingChange("size", v)}
-                  min={10}
-                  max={100}
-                  step={5}
-                />
-              </div>
               <label className="region-checkbox-row">
                 <input
                   type="checkbox"
@@ -92,6 +79,9 @@ function MixerControls({
                     : "Outer (High Freq)"}
                 </span>
               </label>
+              <p className="region-empty-text">
+                Drag/resize the region on the FT view.
+              </p>
             </div>
           </div>
         )}
