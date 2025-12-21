@@ -29,6 +29,7 @@ function ImageViewPort({
   const imageCanvasRef = useRef(null);
   const ftCanvasRef = useRef(null);
   const fileInputRef = useRef(null);
+  const ftDragRef = useRef({ pointerId: null, mode: null, start: null });
 
   const [ftComponent, setFtComponent] = useState("FT Magnitude");
 
@@ -64,6 +65,26 @@ function ImageViewPort({
   // ---------------------------------------------------------
   // 2. Render Frequency Domain Canvas + Region Overlay
   // ---------------------------------------------------------
+  // Ensure regionSettings is initialized to a sensible default once we know padded dimensions.
+  useEffect(() => {
+    if (!showRegion) return;
+    if (!setRegionSettings) return;
+    if (!paddedWidth || !paddedHeight) return;
+
+    setRegionSettings((prev) => {
+      const hasValidRegion = prev.endX > prev.startX && prev.endY > prev.startY;
+      if (hasValidRegion) return prev;
+
+      const defW = Math.floor(paddedWidth * 0.4);
+      const defH = Math.floor(paddedHeight * 0.4);
+      const startX = Math.floor((paddedWidth - defW) / 2);
+      const startY = Math.floor((paddedHeight - defH) / 2);
+      const endX = startX + defW;
+      const endY = startY + defH;
+      return { ...prev, startX, startY, endX, endY };
+    });
+  }, [showRegion, paddedWidth, paddedHeight, setRegionSettings]);
+
   useEffect(() => {
     if (!ftCanvasRef.current || paddedWidth === 0 || paddedHeight === 0) return;
 
@@ -113,15 +134,8 @@ function ImageViewPort({
     if (showRegion && regionSettings) {
       let { startX, startY, endX, endY, isInner } = regionSettings;
 
-      // Handle initialization if state is empty
-      if (endX <= startX || endY <= startY) {
-        const defW = Math.floor(paddedWidth * 0.4);
-        const defH = Math.floor(paddedHeight * 0.4);
-        startX = Math.floor((paddedWidth - defW) / 2);
-        startY = Math.floor((paddedHeight - defH) / 2);
-        endX = startX + defW;
-        endY = startY + defH;
-      }
+      // If state is still invalid, skip drawing this frame (init effect will fix it).
+      if (endX <= startX || endY <= startY) return;
 
       const rw = endX - startX;
       const rh = endY - startY;
@@ -202,9 +216,14 @@ function ImageViewPort({
 
       if (mode) {
         e.preventDefault();
-        ftCanvasRef.current.setPointerCapture(e.pointerId);
-        ftCanvasRef.current.__dragMode = mode;
-        ftCanvasRef.current.__dragStart = { x, y };
+        e.stopPropagation();
+        // Pointer events are attached to the wrapper div, so capture must be set on that element.
+        e.currentTarget.setPointerCapture(e.pointerId);
+        ftDragRef.current = {
+          pointerId: e.pointerId,
+          mode,
+          start: { x, y },
+        };
         return;
       }
     }
@@ -215,38 +234,45 @@ function ImageViewPort({
   };
 
   const handleFtPointerMove = (e) => {
+    const drag = ftDragRef.current;
     const canvas = ftCanvasRef.current;
-    if (showRegion && canvas?.__dragMode && canvas.__dragStart) {
+    if (
+      showRegion &&
+      canvas &&
+      drag.mode &&
+      drag.start &&
+      drag.pointerId === e.pointerId
+    ) {
       const rect = canvas.getBoundingClientRect();
       const scaleX = paddedWidth / rect.width;
       const scaleY = paddedHeight / rect.height;
       const x = (e.clientX - rect.left) * scaleX;
       const y = (e.clientY - rect.top) * scaleY;
 
-      const dx = x - canvas.__dragStart.x;
-      const dy = y - canvas.__dragStart.y;
+      const dx = x - drag.start.x;
+      const dy = y - drag.start.y;
       const minSize = 10;
 
       setRegionSettings((prev) => {
         let { startX, startY, endX, endY } = prev;
-        if (canvas.__dragMode === "move") {
+        if (drag.mode === "move") {
           const w = endX - startX;
           const h = endY - startY;
           startX = Math.max(0, Math.min(paddedWidth - w, startX + dx));
           startY = Math.max(0, Math.min(paddedHeight - h, startY + dy));
           endX = startX + w;
           endY = startY + h;
-        } else if (canvas.__dragMode === "resize-tl") {
+        } else if (drag.mode === "resize-tl") {
           startX = Math.max(0, Math.min(endX - minSize, startX + dx));
           startY = Math.max(0, Math.min(endY - minSize, startY + dy));
-        } else if (canvas.__dragMode === "resize-br") {
+        } else if (drag.mode === "resize-br") {
           endX = Math.min(paddedWidth, Math.max(startX + minSize, endX + dx));
           endY = Math.min(paddedHeight, Math.max(startY + minSize, endY + dy));
         }
         return { ...prev, startX, startY, endX, endY };
       });
 
-      canvas.__dragStart = { x, y };
+      ftDragRef.current = { ...drag, start: { x, y } };
       return;
     }
 
@@ -259,13 +285,12 @@ function ImageViewPort({
   };
 
   const handleFtPointerUp = (e) => {
-    const canvas = ftCanvasRef.current;
-    if (canvas?.__dragMode) {
+    const drag = ftDragRef.current;
+    if (drag.pointerId === e.pointerId) {
       try {
-        canvas.releasePointerCapture(e.pointerId);
+        e.currentTarget.releasePointerCapture(e.pointerId);
       } catch {}
-      canvas.__dragMode = null;
-      canvas.__dragStart = null;
+      ftDragRef.current = { pointerId: null, mode: null, start: null };
     }
     setIsFtDragging(false);
   };
